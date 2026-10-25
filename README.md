@@ -2,82 +2,55 @@
 
 ## Deploy on Streamlit Community Cloud
 
-`app.py` imports `auth.py`, `database.py`, and `faiss_engine.py` as local modules.
-Keep all four Python files in the same directory in the GitHub repository, with
-the filenames and capitalization shown here. In Streamlit Community Cloud, select
-that repository and set the app file path to `app.py` (or the relative path to
-`app.py` if the files are in a subdirectory).
+`app.py` is self-contained. In Streamlit Community Cloud, select the GitHub
+repository and set the app file path to `app.py` (or its relative path if it is
+in a subdirectory).
 
-The `requirements.txt` file must be in that same app directory. Commit and push
-all project files before redeploying. If the app was already deployed, use
-**Manage app → Reboot app** after pushing the corrected files.
+Keep `requirements.txt` beside `app.py`. Commit and push both files before
+deploying. If the app was already deployed, use **Manage app → Reboot app**
+after pushing the changes.
 
-The SQLite database is created by `database.py` when the app starts; it is not
-an installable Python dependency and does not need to be uploaded.
+Run locally with:
 
-## Configure Google sign-in
+```powershell
+python -m pip install -r requirements.txt
+python -m streamlit run app.py
+```
 
-PharmaGuard uses Streamlit's OpenID Connect login with Google. Create an OAuth
-client in Google Cloud Console, configure the OAuth consent screen, and add your
-Streamlit app's OAuth callback URL as an authorized redirect URI. The callback
-URL is your app URL followed by `/oauth2callback` (for local development, use
-`http://localhost:8501/oauth2callback`).
-
-Add the following to Streamlit secrets (Streamlit Community Cloud: **App
-settings → Secrets**). Keep client secrets private and do not commit them to
-GitHub:
+Configure admin access in Streamlit Cloud **App settings → Secrets**:
 
 ```toml
-[auth]
-redirect_uri = "https://YOUR-APP.streamlit.app/oauth2callback"
-cookie_secret = "REPLACE_WITH_A_LONG_RANDOM_SECRET"
-client_id = "YOUR_GOOGLE_OAUTH_CLIENT_ID"
-client_secret = "YOUR_GOOGLE_OAUTH_CLIENT_SECRET"
-server_metadata_url = "https://accounts.google.com/.well-known/openid-configuration"
-
 [pharmaguard]
 admin_emails = ["admin@example.com"]
 ```
 
-Google accounts with verified emails listed in `admin_emails` receive the
-Admin role; all other verified Google accounts receive the User role. Add an
-email to the list only when that person should have permission to edit the
-interaction knowledge base.
+Register using one of the listed email addresses to access the admin panel.
+New accounts not on the allowlist are regular Users. Never grant admin access
+to an email address you do not control.
 
-If Google OAuth is not configured, the app safely treats the Google login
-state as signed out and displays local account sign-in and registration instead.
-After changing `requirements.txt`, push the updated file and reboot the app so
-Streamlit Cloud installs the supported Streamlit version.
+## Local accounts and JSON data
 
-## Local accounts
+The app creates `users_db.json` and `drug_interactions_db.json` beside `app.py`
+when they do not exist. Account passwords are stored as salted PBKDF2-HMAC
+SHA-256 hashes; plaintext passwords are not written to disk. The starter
+interaction entries are reference examples and are not independently
+clinician-validated. Review all records and their sources before any clinical
+use. Local files may be ephemeral or instance-specific on hosted platforms;
+use persistent, access-controlled storage for deployment.
 
-Users can also register and sign in with an email address and password from
-the app's login page. Passwords must be at least 12 characters and are stored
-as salted scrypt hashes in the SQLite database. Newly registered accounts are
-always regular Users; configure Google admin emails as above to grant Admin
-access. Protect and back up `pharma_guard.db` appropriately if retaining
-accounts between deployments.
+The first search downloads the `all-MiniLM-L6-v2` model. The model and FAISS
+index are cached in the Streamlit process. Saving a new admin entry invalidates
+and rebuilds the index. The app uses local JSON files; hosted platforms may
+discard changes or run multiple instances with separate files. Use persistent,
+access-controlled storage for deployment.
 
-## Fix `ModuleNotFoundError: No module named 'database'`
+## Deployment notes
 
-Streamlit Cloud runs the files in the GitHub repository; it does not import
-Python files from a ZIP that has only been uploaded as an attachment. Extract
-`PharmaGuard_Streamlit_Deploy.zip`, then commit and push these files together
-to the same directory in the repository:
+Streamlit Cloud deploys from the selected GitHub branch; uploading a ZIP
+elsewhere does not install its contents. Commit `app.py` and `requirements.txt`
+to the same directory in that branch and set the app's main file path to the
+correct relative path.
 
-```text
-app.py
-auth.py
-database.py
-faiss_engine.py
-requirements.txt
-README.md
-```
-
-In the Streamlit Cloud app settings, point **Main file path** to the extracted
-`app.py` (for example, `app.py` when those files are at the repository root, or
-`biomed_project123/app.py` when they are in that subdirectory). Check that the
-filename is exactly `database.py` (lowercase) and is not nested in a different
-folder. Push the files to the branch selected in the app settings and reboot
-the app. The app path from an error traceback can be used to confirm which
-directory Streamlit is running.
+The starter interactions are reference examples, not independent clinical
+validation. This prototype is not HIPAA-compliant and must not be used as a
+substitute for a clinician or as a production clinical decision system.
