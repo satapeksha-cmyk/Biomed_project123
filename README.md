@@ -15,6 +15,44 @@ all project files before redeploying. If the app was already deployed, use
 The SQLite database is created by `database.py` when the app starts; it is not
 an installable Python dependency and does not need to be uploaded.
 
+## Configure Google sign-in
+
+PharmaGuard uses Streamlit's OpenID Connect login with Google. Create an OAuth
+client in Google Cloud Console, configure the OAuth consent screen, and add your
+Streamlit app's OAuth callback URL as an authorized redirect URI. The callback
+URL is your app URL followed by `/oauth2callback` (for local development, use
+`http://localhost:8501/oauth2callback`).
+
+Add the following to Streamlit secrets (Streamlit Community Cloud: **App
+settings → Secrets**). Keep client secrets private and do not commit them to
+GitHub:
+
+```toml
+[auth]
+redirect_uri = "https://YOUR-APP.streamlit.app/oauth2callback"
+cookie_secret = "REPLACE_WITH_A_LONG_RANDOM_SECRET"
+client_id = "YOUR_GOOGLE_OAUTH_CLIENT_ID"
+client_secret = "YOUR_GOOGLE_OAUTH_CLIENT_SECRET"
+server_metadata_url = "https://accounts.google.com/.well-known/openid-configuration"
+
+[pharmaguard]
+admin_emails = ["admin@example.com"]
+```
+
+Google accounts with verified emails listed in `admin_emails` receive the
+Admin role; all other verified Google accounts receive the User role. Add an
+email to the list only when that person should have permission to edit the
+interaction knowledge base.
+
+## Local accounts
+
+Users can also register and sign in with an email address and password from
+the app's login page. Passwords must be at least 12 characters and are stored
+as salted scrypt hashes in the SQLite database. Newly registered accounts are
+always regular Users; configure Google admin emails as above to grant Admin
+access. Protect and back up `pharma_guard.db` appropriately if retaining
+accounts between deployments.
+
 ## Fix `ModuleNotFoundError: No module named 'database'`
 
 Streamlit Cloud runs the files in the GitHub repository; it does not import

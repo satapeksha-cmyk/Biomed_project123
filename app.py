@@ -50,20 +50,87 @@ def _get_search_engine(records: list[dict[str, Any]]) -> DrugInteractionSearch:
 
 
 def _render_login() -> bool:
-    with st.sidebar:
-        st.subheader("Sign in")
-        with st.form("login_form"):
-            role = st.selectbox("I am a", ("User", "Admin"))
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
-            submitted = st.form_submit_button("Sign in", use_container_width=True)
-        if submitted:
-            if auth.authenticate(username, password, role):
-                st.success(f"Signed in as {role}.")
-                st.rerun()
-            st.error("Sign-in failed. Check your role, username, and password.")
-        st.caption("Demo accounts: User `user` / `user123`; Admin `admin` / `admin123`.")
-    return bool(st.session_state.get("authenticated"))
+    user = st.user
+    if user.is_logged_in:
+        email = str(user.get("email", "")).strip().casefold()
+        if not email or not user.get("email_verified", False):
+            st.error("Google did not provide a verified email address. Access is denied.")
+            if st.button("Sign out"):
+                st.logout()
+            return False
+
+        configured_admins = st.secrets.get("pharmaguard", {}).get("admin_emails", [])
+        if isinstance(configured_admins, str):
+            configured_admins = [configured_admins]
+        admin_emails = {
+            str(admin_email).strip().casefold()
+            for admin_email in configured_admins
+            if str(admin_email).strip()
+        }
+        st.session_state["authenticated"] = True
+        st.session_state["username"] = email
+        st.session_state["role"] = "Admin" if email in admin_emails else "User"
+        st.session_state["auth_method"] = "google"
+        return True
+
+    if (
+        st.session_state.get("authenticated")
+        and st.session_state.get("auth_method") == "local"
+    ):
+        return True
+
+    st.session_state["authenticated"] = False
+    st.session_state["username"] = None
+    st.session_state["role"] = None
+    st.session_state["auth_method"] = None
+    st.header("Welcome to PharmaGuard")
+    st.write("Sign in to your account or create one to access the interaction checker.")
+    sign_in_tab, create_account_tab = st.tabs(["Sign in", "Create account"])
+
+    with sign_in_tab:
+        with st.form("account_login_form"):
+            email = st.text_input("Email address", key="login_email")
+            password = st.text_input("Password", type="password", key="login_password")
+            login_submitted = st.form_submit_button("Sign in", use_container_width=True)
+        if login_submitted:
+            try:
+                if auth.authenticate(email, password):
+                    st.rerun()
+                st.error("Email or password is incorrect.")
+            except (ValueError, RuntimeError) as exc:
+                st.error(str(exc))
+
+    with create_account_tab:
+        with st.form("create_account_form"):
+            new_email = st.text_input("Email address", key="create_email")
+            new_password = st.text_input(
+                "Password (at least 12 characters)",
+                type="password",
+                key="create_password",
+            )
+            confirm_password = st.text_input(
+                "Confirm password",
+                type="password",
+                key="confirm_password",
+            )
+            create_submitted = st.form_submit_button(
+                "Create account", use_container_width=True
+            )
+        if create_submitted:
+            try:
+                auth.create_account(new_email, new_password, confirm_password)
+                st.success("Account created. Sign in with your new credentials.")
+            except (ValueError, RuntimeError) as exc:
+                st.error(str(exc))
+
+    st.divider()
+    auth_configured = bool(st.secrets.get("auth", {}).get("client_id"))
+    if auth_configured:
+        if st.button("Continue with Google", use_container_width=True):
+            st.login()
+    else:
+        st.caption("Google sign-in is available when OAuth is configured by the administrator.")
+    return False
 
 
 def _render_interaction_result(row: dict[str, Any]) -> None:
@@ -262,8 +329,11 @@ if not _render_login():
 with st.sidebar:
     st.write(f"Signed in: **{st.session_state['username']}** ({st.session_state['role']})")
     if st.button("Log out", use_container_width=True):
-        auth.logout()
-        st.rerun()
+        if st.session_state.get("auth_method") == "google":
+            st.logout()
+        else:
+            auth.logout()
+            st.rerun()
     pages = ["Interaction checker", "Analytics"]
     if st.session_state["role"] == "Admin":
         pages.append("Admin dashboard")
