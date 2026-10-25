@@ -44,6 +44,11 @@ Admin role; all other verified Google accounts receive the User role. Add an
 email to the list only when that person should have permission to edit the
 interaction knowledge base.
 
+If Google OAuth is not configured, the app safely treats the Google login
+state as signed out and displays local account sign-in and registration instead.
+After changing `requirements.txt`, push the updated file and reboot the app so
+Streamlit Cloud installs the supported Streamlit version.
+
 ## Local accounts
 
 Users can also register and sign in with an email address and password from

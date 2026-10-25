@@ -49,9 +49,23 @@ def _get_search_engine(records: list[dict[str, Any]]) -> DrugInteractionSearch:
     return engine
 
 
+def _get_google_identity() -> tuple[Any | None, bool]:
+    """Read Streamlit's optional OIDC user without failing when auth is unconfigured."""
+    user = getattr(st, "user", None)
+    if user is None:
+        user = getattr(st, "experimental_user", None)
+    if user is None:
+        return None, False
+    try:
+        logged_in = user.get("is_logged_in", False)
+    except (AttributeError, KeyError, TypeError):
+        logged_in = getattr(user, "is_logged_in", False)
+    return user, bool(logged_in)
+
+
 def _render_login() -> bool:
-    user = st.user
-    if user.is_logged_in:
+    user, google_logged_in = _get_google_identity()
+    if google_logged_in and user is not None:
         email = str(user.get("email", "")).strip().casefold()
         if not email or not user.get("email_verified", False):
             st.error("Google did not provide a verified email address. Access is denied.")
